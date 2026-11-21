@@ -3,8 +3,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
-RUN useradd --create-home quantora && mkdir -p /data && chown quantora /data
+RUN useradd --create-home quantora && mkdir -p /data /app && chown -R quantora:quantora /data /app
 USER quantora
-ENV DATABASE_URL=sqlite:////data/quantora.db
+ENV DATABASE_URL=sqlite:////tmp/quantora.db
 EXPOSE 8000
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --no-access-log"]
