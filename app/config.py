@@ -30,5 +30,8 @@ class Settings(BaseSettings):
     cloudflare_api_token: SecretStr = SecretStr('')
     cloudflare_account_id: str = ''
     cloudflare_model: str = '@cf/meta/llama-3.1-8b-instruct'
+    telegram_bot_token: SecretStr = SecretStr('')
+    telegram_chat_id: str = ''
+    render_service_url: str = 'https://quantora-backend-pn3o.onrender.com'
 
 settings = Settings()

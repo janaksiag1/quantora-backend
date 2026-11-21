@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, String, Text, DateTime
+import re
+from sqlalchemy import create_engine, String, Text, DateTime, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 from .config import settings
 from contextvars import ContextVar
@@ -18,7 +19,33 @@ class ResearchAudit(Base):
     payload: Mapped[str] = mapped_column(Text)
     user_id: Mapped[str] = mapped_column(String(128), default='local', index=True)
 
-engine = create_engine(settings.database_url, connect_args={'check_same_thread': False} if settings.database_url.startswith('sqlite') else {})
+class IPOAlertSubscriber(Base):
+    __tablename__ = 'ipo_alert_subscribers'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_type: Mapped[str] = mapped_column(String(20), default='telegram') # telegram or whatsapp
+    target_id: Mapped[str] = mapped_column(String(128), index=True) # chat_id or phone
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_gmp: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_listings: Mapped[bool] = mapped_column(Boolean, default=True)
+
+class MorningBriefingCache(Base):
+    __tablename__ = 'morning_briefing_cache'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    date_key: Mapped[str] = mapped_column(String(20), unique=True, index=True) # YYYY-MM-DD
+    headline: Mapped[str] = mapped_column(String(255))
+    script: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+db_url = settings.database_url
+if db_url.startswith('postgres://'):
+    db_url = db_url.replace('postgres://', 'postgresql://', 1)
+
+if db_url.startswith('sqlite'):
+    engine = create_engine(db_url, connect_args={'check_same_thread': False})
+else:
+    engine = create_engine(db_url, pool_pre_ping=True, pool_recycle=300)
+
 Session = sessionmaker(engine)
 
 def save_research(symbol: str, source: str, payload: str):

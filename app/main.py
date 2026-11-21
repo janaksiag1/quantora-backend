@@ -25,7 +25,7 @@ from .config import settings
 
 from .schemas import ChatRequest, DebateRequest, ResearchStageRequest
 
-from .models import Base, engine, Session, ResearchAudit, research_owner
+from .models import Base, engine, Session, ResearchAudit, research_owner, IPOAlertSubscriber, MorningBriefingCache
 
 from .providers import market, ai, search_assets
 
@@ -50,22 +50,30 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 
 
 @asynccontextmanager
-
 async def lifespan(app):
-
     Base.metadata.create_all(engine)
-
-    if 'user_id' not in {column['name'] for column in inspect(engine).get_columns('research_audit')}:
-
-        with engine.begin() as connection:
-
-            connection.execute(text("ALTER TABLE research_audit ADD COLUMN user_id VARCHAR(128) NOT NULL DEFAULT 'local'"))
-
+    try:
+        if 'user_id' not in {column['name'] for column in inspect(engine).get_columns('research_audit')}:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE research_audit ADD COLUMN user_id VARCHAR(128) NOT NULL DEFAULT 'local'"))
+    except Exception:
+        pass
+    keepalive_task = asyncio.create_task(keep_alive_worker())
     yield
-
+    keepalive_task.cancel()
     engine.dispose()
 
-
+async def keep_alive_worker():
+    """Periodically sends an inbound ping to the public Render URL to prevent idling/sleeping."""
+    await asyncio.sleep(60)
+    url = f"{settings.render_service_url.rstrip('/')}/health"
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.get(url, headers={"User-Agent": "GainbudSelfPing/1.0"})
+        except Exception:
+            pass
+        await asyncio.sleep(600)
 
 app = FastAPI(title='Gainbud', description='Research before you invest.', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -78,7 +86,22 @@ async def ipo_filings():
     try: return await filings()
     except Exception: return JSONResponse({'error':'SEBI filing records are unavailable. Scheduled exchange issues remain separate.','filings':[]},status_code=503)
 
-app.add_middleware(CORSMiddleware, allow_origins=[settings.frontend_origin], allow_methods=['GET', 'POST'], allow_headers=['Content-Type', 'X-Internal-Token'])
+allowed_origins = list({
+    settings.frontend_origin,
+    'https://gainbud.in',
+    'https://www.gainbud.in',
+    'https://frontend-mu-tan-44.vercel.app',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+})
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_origin_regex=r'https://.*\.vercel\.app',
+    allow_methods=['GET', 'POST', 'OPTIONS'],
+    allow_headers=['*'],
+    allow_credentials=True,
+)
 
 windows = {}
 
@@ -485,4 +508,55 @@ async def live_precious_metals(request:Request):
             yield 'data: '+json.dumps(payload)+'\n\n'
             await asyncio.sleep(5)
     return StreamingResponse(stream(),media_type='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
+
+@app.post('/v1/alerts/telegram/test')
+async def test_telegram_alert(request: Request):
+    from .telegram_bot import send_telegram_message
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    chat_id = body.get("chat_id")
+    res = await send_telegram_message(
+        "⚡ <b>Gainbud Alert System Connected!</b>\n\nYou will receive institutional IPO alerts, Grey Market Premium (GMP) updates, and listing forecasts directly here.",
+        chat_id=chat_id,
+        buttons=[{"text": "Visit Gainbud Terminal", "url": "https://gainbud.in/app"}]
+    )
+    return res
+
+@app.post('/v1/alerts/telegram/broadcast-ipo')
+async def broadcast_ipo(request: Request):
+    from .telegram_bot import format_and_send_ipo_alert
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    res = await format_and_send_ipo_alert(body)
+    return res
+
+@app.get('/v1/briefing/today')
+async def get_today_briefing():
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        with Session.begin() as db:
+            cached = db.execute(select(MorningBriefingCache).where(MorningBriefingCache.date_key == today_str)).scalar_one_or_none()
+            if cached:
+                return {"date": cached.date_key, "headline": cached.headline, "script": cached.script, "cached": True}
+    except Exception:
+        pass
+
+    headline = "Nifty & Sensex Morning Market Pulse"
+    script = (
+        "Good morning, this is your Gainbud Institutional Market Digest. "
+        "Indian equities are trading with positive structural breadth across domestic indices. "
+        "In the primary market, investor subscription demand remains strong across Mainboard and SME issues with resilient grey market premiums. "
+        "Key macroeconomic cues indicate balanced foreign institutional flows and stable domestic liquidity. "
+        "Explore complete ten-agent forensic research and valuation consensus on your Gainbud workspace."
+    )
+    try:
+        with Session.begin() as db:
+            db.add(MorningBriefingCache(date_key=today_str, headline=headline, script=script))
+    except Exception:
+        pass
+    return {"date": today_str, "headline": headline, "script": script, "cached": False}
 
