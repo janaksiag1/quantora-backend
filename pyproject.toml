@@ -1,0 +1,8 @@
+[project]
+name = "quantora-research-api"
+version = "1.0.0"
+requires-python = ">=3.12,<3.14"
+dependencies = ["fastapi==0.162.0", "uvicorn==0.54.0", "httpx==0.28.1", "pydantic-settings==2.16.2", "SQLAlchemy==2.1.6", "beautifulsoup4==4.15.0", "lxml==6.1.1", "pypdf==6.21.4"]
+
+[tool.vercel]
+entrypoint = "app.main:app"

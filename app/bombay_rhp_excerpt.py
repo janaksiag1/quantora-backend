@@ -1,0 +1,35 @@
+"""Verified versioned observations from the issuer's 21 October 2026 RHP."""
+VERIFIED_RHP = {'url': 'https://cdn.prod.website-files.com/66dae2d0a835d8d76717f6ea/6ad9ce8b73ad22c98ba71e48_RHP.pdf',
+ 'pagesInDocument': 599,
+ 'documentDate': '2026-10-21',
+ 'sha256': 'c96fa6fe5d27f01860c9aa064d13199a273913382abc8e9b064d2934383ac6a3',
+ 'excerpts': [{'page': 123,
+               'text': 'Bombay Coated and Special Steels Limited, Objects of the Issue (printed p. '
+                       '117). Fresh issue up to INR 1,830.57 million gross. Proposed allocation: '
+                       'INR 1,250.00 million for repayment or prepayment of borrowings; INR 157.70 '
+                       'million for acquisition of capital equipment under existing lease '
+                       'arrangements with Siemens Financial Services; general corporate purposes '
+                       'to be finalised. Net proceeds are gross proceeds less applicable issue '
+                       'expenses.'},
+              {'page': 324,
+               'text': 'Restated statement of assets and liabilities (printed p. 318). INR '
+                       'million. Columns: 30 June 2026 | 31 March 2026 | 31 March 2025 | 31 March '
+                       '2024. Total assets: 5261.08 | 5714.66 | 4582.05 | 3502.08. Total equity: '
+                       '1366.16 | 1215.81 | 830.47 | 543.59. Non-current borrowings: 641.68 | '
+                       '522.89 | 392.25 | 406.91. Current borrowings: 2095.22 | 2861.65 | 2377.36 '
+                       '| 1934.69. Cash and cash equivalents: 91.69 | 109.31 | 20.35 | 1.41.'},
+              {'page': 325,
+               'text': 'Restated profit and loss (printed p. 319). INR million. Columns: quarter '
+                       'ended 30 June 2026 | FY ended 31 March 2026 | FY ended 31 March 2025 | FY '
+                       'ended 31 March 2024. Revenue from operations: 3970.80 | 12668.18 | '
+                       '10557.07 | 7552.59. Profit after tax: 150.75 | 305.39 | 286.72 | 211.38. '
+                       'Quarterly figures are not annualised.'},
+              {'page': 326,
+               'text': 'Restated statement of cash flows (printed p. 320). INR million. Columns: '
+                       'quarter ended 30 June 2026 | FY ended 31 March 2026 | FY ended 31 March '
+                       '2025 | FY ended 31 March 2024. Net cash from operating activities: 723.05 '
+                       '| 102.17 | 320.90 | 114.87. Net cash used in investing activities: -6.80 | '
+                       '-350.27 | -417.62 | -528.50. Net cash from or used in financing '
+                       'activities: -733.88 | 337.06 | 115.65 | 395.63.'}],
+ 'scope': "Verified transcription of selected pages from the issuer's 21 October 2026 RHP. This is "
+          'a versioned document reference, not a full-document audit or live financial statement.'}
