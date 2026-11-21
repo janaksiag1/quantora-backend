@@ -1,0 +1,15 @@
+name: Render Zero Cold-Start Keepalive
+
+on:
+  schedule:
+    # Run every 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Backend
+        run: |
+          curl -s -f -m 15 -A "GainbudGitHubKeepAlive/1.0" https://quantora-backend-pn3o.onrender.com/health || true
