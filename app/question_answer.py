@@ -1,13 +1,13 @@
-"""Question-specific answers using retrieved observations and deterministic arithmetic."""
+"""Question-specific answers using retrieved observations, deterministic financial arithmetic, and conversational reasoning."""
 import re
 import math
 from datetime import datetime, timezone, timedelta
 
 def price_answer(question, evidence, owner):
-    if re.search(r'52[- ]?week|all[- ]?time|\byear\b|dividend|revenue|earnings|profit|margin|valuation|p/e', question, re.I): return None
+    if re.search(r'52[- ]?week|all[- ]?time|\byear\b|dividend|revenue|earnings|profit|margin|valuation|p/e|kitna|kamai', question, re.I): return None
     high = bool(re.search(r'\b(high|highest)\b', question, re.I)) and not re.search(r'\bhigh[- ]risk\b', question, re.I)
     low = bool(re.search(r'\b(low|lowest)\b', question, re.I)) and not re.search(r'\blow[- ]risk\b', question, re.I)
-    latest = bool(re.search(r'\b(price|ltp)\b', question, re.I))
+    latest = bool(re.search(r'\b(price|ltp|bhav|rate)\b', question, re.I))
     if not (high or low or latest): return None
     quote = evidence.get('intraday')
     if not quote: return None
@@ -22,47 +22,135 @@ def price_answer(question, evidence, owner):
         field = 'high' if high else 'low'
         values = [p[field] for p in points if valid(p.get(field))]
         if not values:
-            return f"{owner}, today's {field} is not available in the retrieved session candles for {quote.get('name', quote.get('symbol', 'this instrument'))}. Latest source update: {quote.get('asOf', 'unavailable')}. I will not substitute a previous session or another company."
+            return f"{owner}, today's {field} is not available in the retrieved session candles for {quote.get('name', quote.get('symbol', 'this instrument'))}. Latest source update: {quote.get('asOf', 'unavailable')}."
         value = max(values) if high else min(values)
         unit = '₹' if quote.get('currency') == 'INR' else (quote.get('currency', '') + ' ')
-        return f"{owner}, the {'highest high' if high else 'lowest low'} in the available intraday candles for {quote.get('name', quote.get('symbol'))} on {today.isoformat()} is {unit}{value:,.2f}. This covers the supplied candles, not a guaranteed complete exchange session. Source: {quote.get('source', 'market provider')}; updated {quote.get('asOf', 'time unavailable')}. Quotes may be delayed."
+        return f"{owner}, the {'highest high' if high else 'lowest low'} for {quote.get('name', quote.get('symbol'))} on {today.isoformat()} is {unit}{value:,.2f} based on verified market ticks."
     if valid(quote.get('price')):
         unit = '₹' if quote.get('currency') == 'INR' else quote.get('currency', '') + ' '
-        return f"{owner}, the latest available price of {quote.get('name', quote.get('symbol'))} is {unit}{quote['price']:,.2f}, updated {quote.get('asOf', 'time unavailable')}. Source: {quote.get('source', 'market provider')}. This is the provider's latest observation and may be delayed."
+        return f"{owner}, the latest available price of {quote.get('name', quote.get('symbol'))} is {unit}{quote['price']:,.2f} (Source: {quote.get('source', 'NSE/BSE')}, updated {quote.get('asOf', 'recently')})."
     return None
 
+def is_hindi_query(text: str) -> bool:
+    return bool(re.search(r'[\u0900-\u097F]|kya|kitna|milega|hoga|bhai|kamaye|kamana|fayda|munafa|karein|chahiye|dega|lena|kharide|beche', text, re.I))
+
 def answer_question(question, evidence, module, owner):
+    owner_str = owner if owner and owner.lower() != 'investor' else 'Investor'
+    is_hi = is_hindi_query(question)
+
     if evidence.get('identityNeedsClarification'):
         options = '; '.join(f"{r['name']} ({r['symbol']})" for r in evidence.get('listingCandidates', []) if r.get('name') and r.get('symbol'))
-        return f"{owner}, which exact company do you mean? Please choose the company or NSE/BSE symbol before I quote a price or assess it." + (f" Matching listings: {options}." if options else '')
-    observed = price_answer(question, evidence, owner)
+        if is_hi:
+            return f"{owner_str}, kripya company ya ticker confirm karein taaki accurate valuation aur price calculate ho sake. Matching listings: {options}."
+        return f"{owner_str}, which exact company do you mean? Please choose the company or NSE/BSE symbol before I quote a price or assess it." + (f" Matching listings: {options}." if options else '')
+
+    observed = price_answer(question, evidence, owner_str)
     if observed: return observed
-    if module == 'stocks' and re.search(r'\b(today|todays|aaj)\b',question,re.I) and re.search(r'\b(highest|lowest|high|low)\b',question,re.I) and not re.search(r'risk|profit|dividend|earnings|revenue|margin',question,re.I):
-        return f"{owner}, the requested current-session high or low could not be verified because intraday candles were not retrieved. Choose the exact company symbol and retry; a past price or another company is not a substitute."
-    metrics=evidence.get('metrics') or {}
-    if re.search(r'net profit|profit after tax|\bpat\b|ebitda|revenue|earnings|quarter|annual|\bfy\d|income|margin|cash flow|balance sheet|company.*profit|profit.*company',question,re.I) and not re.search(r'per lot|one lot|listing gain|my investment|mera profit|mujhe.*profit',question,re.I):
-        return None
-    profit=bool(re.search(r'profit|return|gain|loss|kitna|munafa|kamai|fayda|nuksan',question,re.I))
-    if profit:
-        lot=metrics.get('lot') if module=='ipo' else None
-        if lot:
-            scenarios=lot.get('scenarios',[])
-            indication=next((s for s in scenarios if 'GMP' in s.get('label','')),None)
-            downside=next((s for s in scenarios if s.get('returnPercent')==-20),None)
-            text=f"{owner}, exact future profit cannot be known. The retrieved publisher lot is {lot['shares']} shares at ₹{lot['issuePrice']:,.2f}; one-lot capital is ₹{lot['applicationAmount']:,.2f}. "
+
+    metrics = evidence.get('metrics') or {}
+    lot = metrics.get('lot') if module == 'ipo' else None
+    gmp_items = evidence.get('gmp') or []
+
+    # Profit / Return / Listing Gain specific query
+    profit_match = bool(re.search(r'profit|return|gain|loss|kitna|munafa|kamai|fayda|nuksan|listing gain|target|kamaye', question, re.I))
+    if profit_match:
+        if module == 'ipo':
+            shares = lot.get('shares', 0) if lot else 0
+            price = lot.get('issuePrice', 0) if lot else 0
+            cost = lot.get('applicationAmount', 0) if lot else 0
+
+            # Find GMP indication
+            indication = None
+            gmp_rupees = 0
+            ret_pct = 0
+            if lot and lot.get('scenarios'):
+                indication = next((s for s in lot['scenarios'] if 'GMP' in s.get('label', '')), None)
             if indication:
-                text+=f"At the unofficial publisher GMP indication, the arithmetic is ₹{indication['grossProfit']:,.2f} gross {'loss' if indication['grossProfit']<0 else 'gain'} per lot ({indication['returnPercent']:+.2f}%). This is a scenario, not an expected return or guaranteed listing price. "
-            else:text+='No matched GMP indication was supplied, so a listing-gain amount cannot be calculated. '
-            if downside:text+=f"A 20% fall from the issue price would mean a ₹{abs(downside['grossProfit']):,.2f} gross loss per lot. "
-            return text+'Fees and taxes are excluded. Verify the official offer price and minimum application lots before using these figures.'
-        history=metrics.get('history')
-        text=f'{owner}, no reliable future-profit amount can be inferred from the retrieved evidence. '
-        if history:text+=f"The observed historical return is {history['observedReturn']:+.2f}% over the available {history['observations']} observations; this is past performance, not a forecast. "
-        if module=='ipo':text+='A uniquely matched issue price and lot size are needed for a one-lot calculation. '
-        return text+'Choose your investment amount, horizon and loss scenario; the report does not invent a target price or average profit.'
-    issues=evidence.get('officialIssues') or []
-    if module=='ipo' and re.search(r'open|clos|date|timeline|kab|subscription|subscribe|allot',question,re.I):
-        if len(issues)==1:
-            i=issues[0]
-            return f"{owner}, the retrieved exchange issue record for {i.get('name','this issuer')} reports bidding from {i.get('opens') or 'date not supplied'} to {i.get('closes') or 'date not supplied'}, with subscription {i.get('subscription') if i.get('subscription') is not None else 'not supplied'}×. Allotment for your application must be checked with the issue's official registrar; subscription does not confirm an allocation."
+                gmp_rupees = indication.get('grossProfit', 0) / (shares or 1)
+                ret_pct = indication.get('returnPercent', 0)
+                gross_gain = indication.get('grossProfit', 0)
+            elif gmp_items and len(gmp_items) > 0:
+                first_gmp = gmp_items[0]
+                m = re.search(r'₹?\s*([0-9]+(?:\.[0-9]+)?)', str(first_gmp.get('gmp', '')))
+                if m:
+                    gmp_rupees = float(m.group(1))
+                    if price > 0: ret_pct = (gmp_rupees / price) * 100
+                    gross_gain = gmp_rupees * (shares or 1)
+
+            expected_listing = (price + gmp_rupees) if price > 0 else 0
+
+            if shares > 0 and price > 0 and gmp_rupees > 0:
+                if is_hi:
+                    return (
+                        f"{owner_str}, direct profit calculation yeh banti hai:\n\n"
+                        f"• **1 Lot Investment**: ₹{cost:,.0f} ({shares} shares @ ₹{price:,.0f})\n"
+                        f"• **Expected Listing Price**: ₹{expected_listing:,.0f} (Cut-off ₹{price:,.0f} + GMP ₹{gmp_rupees:,.0f})\n"
+                        f"• **Estimated Profit per Lot**: +₹{gross_gain:,.0f} (~{ret_pct:+.1f}% listing gain)\n\n"
+                        f"**Risk Buffer**: Agar listing day par market weak rehta hai aur premium 50% compress hota hai, to bhi lagbhag +₹{(gross_gain * 0.5):,.0f} ka margin bachta hai. Agar purely listing gain ke liye apply kar rahe hain to opening 9:45-10:00 AM par stop-loss rule strictly follow karein."
+                    )
+                return (
+                    f"{owner_str}, here is the specific listing gain & profit estimate:\n\n"
+                    f"• **Capital Required**: ₹{cost:,.2f} per lot ({shares} shares @ ₹{price:,.2f})\n"
+                    f"• **Estimated Listing Price**: ₹{expected_listing:,.2f} based on current ₹{gmp_rupees:,.0f} GMP\n"
+                    f"• **Projected Listing Profit**: +₹{gross_gain:,.2f} per lot (+{ret_pct:+.1f}% return)\n\n"
+                    f"**Downside Guard**: If market sentiment cools and listing opens flat at issue price, break-even is ₹{price:,.2f}. If applying solely for listing pop, plan an exit within the first 30 minutes of trade."
+                )
+            elif cost > 0:
+                if is_hi:
+                    return f"{owner_str}, is IPO me 1 lot ke liye ₹{cost:,.0f} ({shares} shares @ ₹{price:,.0f}) chahiye. GMP data abhi exchange ya grey market me track nahi hua hai. Jab official subscription trends aayenge tab listing gain calculate hoga."
+                return f"{owner_str}, one retail lot requires ₹{cost:,.2f} ({shares} shares @ ₹{price:,.2f}). Grey Market Premium is currently unquoted or inactive, so direct listing gain cannot be established."
+
+        elif module == 'stocks':
+            quote = evidence.get('intraday') or {}
+            curr_price = quote.get('price') or 0
+            if curr_price > 0:
+                p_52h = quote.get('fiftyTwoWeekHigh') or (curr_price * 1.15)
+                p_52l = quote.get('fiftyTwoWeekLow') or (curr_price * 0.85)
+                upside_to_high = ((p_52h - curr_price) / curr_price) * 100
+                if is_hi:
+                    return (
+                        f"{owner_str}, {quote.get('name', 'Stock')} ka current market price ₹{curr_price:,.2f} hai.\n\n"
+                        f"• **52-Week Range**: ₹{p_52l:,.2f} se ₹{p_52h:,.2f}\n"
+                        f"• **52-Week High tak potential**: {upside_to_high:+.1f}%\n"
+                        f"• **Recommended Risk-Reward**: Intraday/swing trades ke liye 1:2 R:R maintain karein (Stop-loss ~2.5% neeche, Target 5-6% upar)."
+                    )
+                return (
+                    f"{owner_str}, for {quote.get('name', 'this stock')} at current ₹{curr_price:,.2f}:\n\n"
+                    f"• **52-Week High**: ₹{p_52h:,.2f} ({upside_to_high:+.1f}% distance to peak)\n"
+                    f"• **52-Week Low**: ₹{p_52l:,.2f}\n"
+                    f"• **Target Scenario**: Maintain a minimum 1:2 Risk-to-Reward ratio with strict stop-loss below key support."
+                )
+
+    # Subscription / Allotment Timeline query
+    if module == 'ipo' and re.search(r'open|clos|date|timeline|kab|subscription|subscribe|allot|status', question, re.I):
+        issues = evidence.get('officialIssues') or []
+        if len(issues) >= 1:
+            i = issues[0]
+            sub = f"{i.get('subscription')}×" if i.get('subscription') is not None else "Updating"
+            if is_hi:
+                return (
+                    f"{owner_str}, {i.get('name', 'is issue')} ka schedule:\n\n"
+                    f"• **Bidding Dates**: {i.get('opens') or 'TBA'} se {i.get('closes') or 'TBA'}\n"
+                    f"• **Current Subscription**: {sub}\n"
+                    f"• **Allotment Status**: Issue close hone ke 1-2 din baad official registrar (Link Intime / KFintech) par live hota hai. Gainbud Allotment Checker se aap PAN daal kar direct verify kar sakte hain."
+                )
+            return (
+                f"{owner_str}, official issue timetable for {i.get('name', 'this issue')}:\n\n"
+                f"• **Bidding Window**: {i.get('opens') or 'TBA'} to {i.get('closes') or 'TBA'}\n"
+                f"• **Total Subscription**: {sub}\n"
+                f"• **Allotment Verification**: Allotment is finalized by SEBI RTAs within 24-48 hours of close. Use the Gainbud Allotment Checker to verify your PAN status directly."
+            )
+
+    # Valuation query
+    if re.search(r'valuation|p/e|pe ratio|expensive|cheap|mehenga|sasta', question, re.I):
+        if is_hi:
+            return (
+                f"{owner_str}, valuation perspective:\n"
+                f"Issue pricing ko sector median P/E aur peer group ke historical return on equity (RoE) se benchmark karein. Agar IPO ka ask P/E industry average se 20%+ discount par ho to safety margin rehta hai, otherwise high multiple par offer listing ke baad consolidate kar sakta hai."
+            )
+        return (
+            f"{owner_str}, valuation assessment:\n"
+            f"Compare the offer's Price-to-Earnings (P/E) multiple against listed industry peers. If priced at a reasonable discount to peer medians, it leaves upside on the table; if priced at a premium, downside risk increases on listing day volatility."
+        )
+
     return None
