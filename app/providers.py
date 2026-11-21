@@ -44,15 +44,35 @@ class YahooProvider:
 
         interval = '5m' if period == '1d' else '30m' if period == '5d' else '1d'
 
-        async with self.semaphore:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+        encoded = httpx.URL(symbol).raw_path.decode()
+        last_err = None
+        data = None
 
-            async with httpx.AsyncClient(timeout=15) as client:
+        for host in ('query1.finance.yahoo.com', 'query2.finance.yahoo.com'):
+            try:
+                async with self.semaphore:
+                    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                        response = await client.get(
+                            f'https://{host}/v8/finance/chart/{encoded}',
+                            params={'range': period, 'interval': interval},
+                            headers=headers
+                        )
+                        response.raise_for_status()
+                        payload = response.json()
+                        if payload.get('chart', {}).get('result'):
+                            data = payload['chart']['result'][0]
+                            break
+            except Exception as e:
+                last_err = e
+                continue
 
-                response = await client.get(f'https://query1.finance.yahoo.com/v8/finance/chart/{httpx.URL(symbol).raw_path.decode()}', params={'range': period, 'interval': interval}, headers={'User-Agent': 'Quantora/1.0'})
-
-                response.raise_for_status()
-
-        data = response.json()['chart']['result'][0]
+        if not data:
+            raise last_err or RuntimeError(f'No chart data returned for {symbol}')
 
         meta, values = data['meta'], data['indicators']['quote'][0]
 
