@@ -59,8 +59,11 @@ async def lifespan(app):
     except Exception:
         pass
     keepalive_task = asyncio.create_task(keep_alive_worker())
+    from .telegram_broadcaster import telegram_auto_broadcaster_worker
+    telegram_task = asyncio.create_task(telegram_auto_broadcaster_worker())
     yield
     keepalive_task.cancel()
+    telegram_task.cancel()
     engine.dispose()
 
 async def keep_alive_worker():
@@ -560,3 +563,38 @@ async def get_today_briefing():
         pass
     return {"date": today_str, "headline": headline, "script": script, "cached": False}
 
+
+
+@app.get('/v1/telegram/status')
+async def telegram_status():
+    from .telegram_broadcaster import get_channel_target, _last_broadcasts
+    token = settings.telegram_bot_token.get_secret_value()
+    return {
+        'ok': True,
+        'bot_configured': bool(token),
+        'channel_target': get_channel_target(),
+        'last_broadcasts': _last_broadcasts
+    }
+
+@app.post('/v1/telegram/broadcast')
+async def trigger_telegram_broadcast(request: Request):
+    from .telegram_broadcaster import broadcast_pre_market, broadcast_ipo_gmp, broadcast_fii_dii, broadcast_weekend_feature, get_channel_target
+    from .telegram_bot import send_telegram_message
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    b_type = body.get('type', 'custom')
+    target = body.get('chat_id') or get_channel_target()
+    if b_type == 'pre_market':
+        return await broadcast_pre_market()
+    elif b_type == 'ipo_gmp':
+        return await broadcast_ipo_gmp()
+    elif b_type == 'fii_dii':
+        return await broadcast_fii_dii()
+    elif b_type == 'weekend':
+        return await broadcast_weekend_feature()
+    else:
+        text = body.get('text', '🚀 Gainbud Live Terminal: https://gainbud.in/app')
+        buttons = body.get('buttons', [{'text': '⚡ Open Terminal', 'url': 'https://gainbud.in/app'}])
+        return await send_telegram_message(text=text, chat_id=target, buttons=buttons)
