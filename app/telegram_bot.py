@@ -48,6 +48,49 @@ async def send_telegram_message(
         logger.error(f"Telegram alert error: {e}")
         return {"ok": False, "error": str(e)}
 
+async def send_telegram_photo(
+    photo_url: str,
+    caption: str,
+    chat_id: Optional[str] = None,
+    parse_mode: str = "HTML",
+    buttons: Optional[List[Dict[str, str]]] = None,
+) -> Dict[str, Any]:
+    """Send a photo with rich caption via Telegram Bot API."""
+    token = settings.telegram_bot_token.get_secret_value()
+    target = chat_id or settings.telegram_chat_id
+
+    if not token:
+        logger.warning("Telegram Bot Token is not set in environment.")
+        return {"ok": False, "error": "TELEGRAM_BOT_TOKEN not configured"}
+
+    if not target:
+        logger.warning("Telegram Chat ID is not specified.")
+        return {"ok": False, "error": "Chat ID not specified"}
+
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    payload: Dict[str, Any] = {
+        "chat_id": target,
+        "photo": photo_url,
+        "caption": caption[:1024],
+        "parse_mode": parse_mode,
+    }
+
+    if buttons:
+        keyboard = [[{"text": b["text"], "url": b["url"]} for b in buttons]]
+        payload["reply_markup"] = {"inline_keyboard": keyboard}
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            res = await client.post(url, json=payload)
+            data = res.json()
+            if not res.is_success:
+                logger.error(f"Telegram photo API error: {data}")
+                return {"ok": False, "status": res.status_code, "data": data}
+            return {"ok": True, "data": data}
+    except Exception as e:
+        logger.error(f"Telegram photo alert error: {e}")
+        return {"ok": False, "error": str(e)}
+
 async def format_and_send_ipo_alert(issue: Dict[str, Any], chat_id: Optional[str] = None) -> Dict[str, Any]:
     """Format rich IPO alert card and broadcast to Telegram."""
     name = issue.get("name", "Unknown IPO")

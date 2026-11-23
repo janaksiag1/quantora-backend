@@ -578,7 +578,7 @@ async def telegram_status():
 
 @app.post('/v1/telegram/broadcast')
 async def trigger_telegram_broadcast(request: Request):
-    from .telegram_broadcaster import broadcast_pre_market, broadcast_ipo_gmp, broadcast_fii_dii, broadcast_weekend_feature, get_channel_target
+    from .telegram_broadcaster import broadcast_pre_market, broadcast_morning_momentum, broadcast_ipo_gmp, broadcast_mid_day_news, broadcast_power_hour, broadcast_closing_bell, broadcast_fii_dii, broadcast_weekend_feature, get_channel_target
     from .telegram_bot import send_telegram_message
     try:
         body = await request.json()
@@ -588,8 +588,16 @@ async def trigger_telegram_broadcast(request: Request):
     target = body.get('chat_id') or get_channel_target()
     if b_type == 'pre_market':
         return await broadcast_pre_market()
+    elif b_type == 'morning_momentum':
+        return await broadcast_morning_momentum()
     elif b_type == 'ipo_gmp':
         return await broadcast_ipo_gmp()
+    elif b_type == 'mid_day_news':
+        return await broadcast_mid_day_news()
+    elif b_type == 'power_hour':
+        return await broadcast_power_hour()
+    elif b_type == 'closing_bell':
+        return await broadcast_closing_bell()
     elif b_type == 'fii_dii':
         return await broadcast_fii_dii()
     elif b_type == 'weekend':
