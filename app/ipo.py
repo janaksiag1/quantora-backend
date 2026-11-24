@@ -24,11 +24,8 @@ async def get_issues(kind='current'):
         if symbol in seen or category.lower() not in ['total', '', 'null']:
             continue
         seen.add(symbol)
-        subscription = row.get('noOfTime')
-        try:
-            subscription = float(subscription) if subscription not in [None, ''] else None
-        except ValueError:
-            subscription = None
+        from .ipo_subscription import subscription_value
+        subscription = subscription_value(row)
         listing_date = row.get('listingDate')
         listing_date = listing_date if listing_date and listing_date.strip() != '-' else None
         has_listed = False
