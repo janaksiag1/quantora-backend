@@ -10,6 +10,12 @@ research_owner = ContextVar('research_owner', default='local')
 class Base(DeclarativeBase):
     pass
 
+class TelegramDelivery(Base):
+    __tablename__ = 'telegram_deliveries'
+    key: Mapped[str] = mapped_column(String(160), primary_key=True)
+    status: Mapped[str] = mapped_column(String(20), default='pending')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 class ResearchAudit(Base):
     __tablename__ = 'research_audit'
     id: Mapped[int] = mapped_column(primary_key=True)

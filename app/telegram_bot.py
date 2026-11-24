@@ -45,8 +45,8 @@ async def send_telegram_message(
                 return {"ok": False, "status": res.status_code, "data": data}
             return {"ok": True, "data": data}
     except Exception as e:
-        logger.error(f"Telegram alert error: {e}")
-        return {"ok": False, "error": str(e)}
+        logger.error("Telegram transport failed (%s)", type(e).__name__)
+        return {"ok": False, "error": "Telegram transport unavailable"}
 
 async def send_telegram_photo(
     photo_url: str,
@@ -88,8 +88,8 @@ async def send_telegram_photo(
                 return {"ok": False, "status": res.status_code, "data": data}
             return {"ok": True, "data": data}
     except Exception as e:
-        logger.error(f"Telegram photo alert error: {e}")
-        return {"ok": False, "error": str(e)}
+        logger.error("Telegram photo transport failed (%s)", type(e).__name__)
+        return {"ok": False, "error": "Telegram transport unavailable"}
 
 async def format_and_send_ipo_alert(issue: Dict[str, Any], chat_id: Optional[str] = None) -> Dict[str, Any]:
     """Format rich IPO alert card and broadcast to Telegram."""

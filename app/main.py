@@ -573,6 +573,10 @@ async def telegram_status():
         'ok': True,
         'bot_configured': bool(token),
         'channel_target': get_channel_target(),
+        'digest_version': 'provider-backed-v1',
+        'automatic_updates': settings.telegram_broadcast_enabled,
+        'interval_minutes': max(5, min(60, settings.telegram_update_minutes)),
+        'shared_delivery_storage': not settings.database_url.startswith('sqlite'),
         'last_broadcasts': _last_broadcasts
     }
 
@@ -584,7 +588,18 @@ async def trigger_telegram_broadcast(request: Request):
         body = await request.json()
     except Exception:
         body = {}
+    if not isinstance(body, dict):
+        return JSONResponse({'ok': False, 'error': 'Expected JSON object'}, status_code=400)
     b_type = body.get('type', 'custom')
+    if b_type == 'scheduled':
+        from .telegram_broadcaster import run_scheduled_broadcast
+        return await run_scheduled_broadcast()
+    if b_type in ('intraday', 'market_open'):
+        return await broadcast_morning_momentum()
+    if b_type == 'mid_day_ipo':
+        return await broadcast_ipo_gmp()
+    if b_type not in ('pre_market', 'morning_momentum', 'ipo_gmp', 'mid_day_news', 'power_hour', 'closing_bell', 'fii_dii', 'weekend', 'custom', 'test'):
+        return JSONResponse({'ok': False, 'error': 'Unsupported broadcast type'}, status_code=400)
     target = body.get('chat_id') or get_channel_target()
     if b_type == 'pre_market':
         return await broadcast_pre_market()
@@ -603,6 +618,17 @@ async def trigger_telegram_broadcast(request: Request):
     elif b_type == 'weekend':
         return await broadcast_weekend_feature()
     else:
-        text = body.get('text', '🚀 Gainbud Live Terminal: https://gainbud.in/app')
-        buttons = body.get('buttons', [{'text': '⚡ Open Terminal', 'url': 'https://gainbud.in/app'}])
+        text = body.get('text', 'Gainbud connection test · https://gainbud.in/app')
+        buttons = body.get('buttons', [{'text': 'Open Gainbud', 'url': 'https://gainbud.in/app'}])
+        from urllib.parse import urlparse
+        if not isinstance(text, str) or not text.strip() or len(text) > 4096 or not isinstance(buttons, list) or len(buttons) > 4:
+            return JSONResponse({'ok': False, 'error': 'Invalid message'}, status_code=400)
+        if any(not isinstance(b, dict) or not isinstance(b.get('text'), str) or urlparse(str(b.get('url', ''))).scheme != 'https' for b in buttons):
+            return JSONResponse({'ok': False, 'error': 'Buttons require HTTPS links'}, status_code=400)
+        photo = body.get('photo')
+        if photo:
+            if not isinstance(photo, str) or urlparse(photo).scheme != 'https' or len(text) > 1024:
+                return JSONResponse({'ok': False, 'error': 'Photo requires HTTPS and caption <=1024 characters'}, status_code=400)
+            from .telegram_bot import send_telegram_photo
+            return await send_telegram_photo(photo, text, chat_id=target, buttons=buttons)
         return await send_telegram_message(text=text, chat_id=target, buttons=buttons)
