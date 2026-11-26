@@ -20,6 +20,8 @@ async def market_status():
     row=next((r for r in raw.get('marketState',[]) if r.get('market')=='Capital Market'),None)
     if not row:raise ValueError('Exchange status unavailable')
     state=str(row.get('marketStatus','')).lower()
+    if re.search(r'closed|halted|suspended|not\s+open',str(row.get('marketStatusMessage','')),re.I):
+        state='closed'
     result={'state':'closed' if state in ['close','closed'] else 'open' if state=='open' else 'unknown','message':row.get('marketStatusMessage') or 'See exchange status','tradeDate':row.get('tradeDate'),'source':'https://www.nseindia.com/market-data/market-status','asOf':now()}
     CACHE['market-status']=(time.monotonic(),result)
     return result

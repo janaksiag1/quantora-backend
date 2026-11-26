@@ -107,22 +107,8 @@ async def _research_events(subject,symbol,risk='Balanced',module='ipo',asset_nam
    verdict='Question: '+subject+'\n\nAnswer to your question:\n'+(direct or report['summary'])+'\n\nRisks:\n'+'\n'.join('- '+v for v in report['risks'])+'\n\nMissing evidence:\n'+'\n'.join('- '+v for v in report['missingEvidence'])
    rounds[9]={'role':'Evidence verifier',**verification,'argument':verdict};yield event('agent',index=9,result=rounds[9])
   except Exception:
-   report={
-    'classification':'Research further',
-    'summary':synthesis.get('argument','')[:400] or f'Evidence review completed for {subject}.',
-    'positives':['Multi-specialist council review completed.','Core financial facts and market context evaluated.'],
-    'risks':['Verify latest corporate disclosures and earnings.','Adhere to disciplined risk management and position limits.'],
-    'missingEvidence':['Pending additional exchange disclosures.'],
-    'nextSteps':['Track continuous price action and delivery volume.'],
-    'question':subject
-   }
-   claim_checks=[]
-   from .question_answer import answer_question
-   direct=answer_question(subject,evidence,module,owner)
-   if direct:report['answerToQuestion']=direct;report['summary']=direct
-   verdict='Question: '+subject+'\n\nAnswer to your question:\n'+report['summary']+'\n\nRisks:\n'+'\n'.join('- '+v for v in report['risks'])+'\n\nMissing evidence:\n'+'\n'.join('- '+v for v in report['missingEvidence'])
-   rounds[9]={'role':'Evidence verifier','argument':verdict,'model':'council-verified'}
-   yield event('agent',index=9,result=rounds[9])
+   yield event('error',error='Evidence verification could not complete after retries. Specialist findings are preserved; no verified final report was produced.')
+   return
   if not evidence.get('sources'):
    report['classification']='Insufficient evidence'
    report['missingEvidence'].append('No attributable source was retrieved. No investment conclusion can be supported.')

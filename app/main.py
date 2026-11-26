@@ -289,7 +289,7 @@ async def chat(body: ChatRequest, request: Request):
         history = [{'role': turn.get('role', 'user'), 'content': turn.get('content', '')[:1200]} for turn in body.history if turn.get('role') in ['user', 'assistant']]
         evidence = await collect_sources(body.prompt, body.symbol, history, module=body.module, asset_name=body.assetName or '')
         from .question_answer import answer_question, price_answer
-        direct = answer_question(body.prompt, evidence, evidence.get('module', body.module), owner_name) if evidence.get('identityNeedsClarification') else price_answer(body.prompt, evidence, owner_name)
+        direct = answer_question(body.prompt, evidence, evidence.get('module', body.module), owner_name)
         if direct:
             return {'answer': direct, 'model': 'source-calculation', 'source': 'Company matching and available source observations; quotes may be delayed.', 'asOf': evidence['retrievedAt']}
         response_style = 'This is a spoken conversation: lead with a concise direct answer, about 90 words, and the most important risk. Offer deeper research as a follow-up. Keep all factual limits and do not invent figures.' if body.voice else 'Lead with the direct answer, followed by key numbers and risks.'
@@ -539,30 +539,10 @@ async def broadcast_ipo(request: Request):
 
 @app.get('/v1/briefing/today')
 async def get_today_briefing():
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    try:
-        with Session.begin() as db:
-            cached = db.execute(select(MorningBriefingCache).where(MorningBriefingCache.date_key == today_str)).scalar_one_or_none()
-            if cached:
-                return {"date": cached.date_key, "headline": cached.headline, "script": cached.script, "cached": True}
-    except Exception:
-        pass
-
-    headline = "Nifty & Sensex Morning Market Pulse"
-    script = (
-        "Good morning, this is your Gainbud Institutional Market Digest. "
-        "Indian equities are trading with positive structural breadth across domestic indices. "
-        "In the primary market, investor subscription demand remains strong across Mainboard and SME issues with resilient grey market premiums. "
-        "Key macroeconomic cues indicate balanced foreign institutional flows and stable domestic liquidity. "
-        "Explore complete ten-agent forensic research and valuation consensus on your Gainbud workspace."
-    )
-    try:
-        with Session.begin() as db:
-            db.add(MorningBriefingCache(date_key=today_str, headline=headline, script=script))
-    except Exception:
-        pass
-    return {"date": today_str, "headline": headline, "script": script, "cached": False}
-
+    # Never reuse the former unsourced, always-positive cached script.
+    from .daily_briefing import build_briefing
+    results = await asyncio.gather(market.quote('^NSEI','1d'),market.quote('^BSESN','1d'),return_exceptions=True)
+    return build_briefing([r for r in results if isinstance(r,dict)])
 
 
 @app.get('/v1/telegram/status')
