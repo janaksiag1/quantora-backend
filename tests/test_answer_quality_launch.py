@@ -47,3 +47,7 @@ def test_closed_message_wins_over_contradictory_exchange_flag(monkeypatch):
     monkeypatch.setattr(market_sources,'get_json',raw)
     monkeypatch.setattr(market_sources,'CACHE',{})
     assert asyncio.run(market_sources.market_status())['state']=='closed'
+
+@pytest.mark.parametrize('prompt',['Find low debt stocks','Explain high volatility','High subscription IPO meaning','Low cost business model'])
+def test_business_adjectives_do_not_trigger_price_intent(prompt):
+    assert price_answer(prompt,{},'Janak') is None

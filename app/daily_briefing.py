@@ -1,6 +1,6 @@
 """Short spoken digest built only from available provider observations."""
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 def build_briefing(quotes):
     lines=[]
@@ -15,5 +15,5 @@ def build_briefing(quotes):
         lines.append(f"{name}: {price:,.2f} points{movement}. Source update: {stamp}.")
         sources.append({'symbol':quote['symbol'],'asOf':stamp,'source':quote.get('source','Market provider')})
     if not lines:
-        return {'date':datetime.now(timezone.utc).date().isoformat(),'headline':'Market digest unavailable','script':'Published market observations could not be retrieved. Try again later. No market direction or institutional flow has been inferred.','available':False,'sources':[],'cached':False}
-    return {'date':datetime.now(timezone.utc).date().isoformat(),'headline':'Published market snapshot','script':'Gainbud market snapshot. '+' '.join(lines)+' Quotes may be delayed. This snapshot does not establish market breadth, institutional flows or future returns.','available':True,'sources':sources,'cached':False}
+        return {'date':datetime.now(timezone(timedelta(hours=5,minutes=30))).date().isoformat(),'headline':'Market digest unavailable','script':'Published market observations could not be retrieved. Try again later. No market direction or institutional flow has been inferred.','available':False,'sources':[],'cached':False}
+    return {'date':datetime.now(timezone(timedelta(hours=5,minutes=30))).date().isoformat(),'headline':'Published market snapshot','script':'Gainbud market snapshot. '+' '.join(lines)+' Quotes may be delayed. This snapshot does not establish market breadth, institutional flows or future returns.','available':True,'sources':sources,'cached':False}

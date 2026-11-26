@@ -4,6 +4,7 @@ import math
 from datetime import datetime, timezone, timedelta
 
 def price_answer(question, evidence, owner):
+    if re.search(r'(?:high|low)[- ](?:debt|volatility|cost|margin|subscription|growth)', question, re.I): return None
     if re.search(r'52[- ]?week|all[- ]?time|\byear\b|dividend|revenue|earnings|profit|margin|valuation|p/e|kamai', question, re.I): return None
     high = bool(re.search(r'\b(high|highest)\b', question, re.I)) and not re.search(r'\bhigh[- ]risk\b', question, re.I)
     low = bool(re.search(r'\b(low|lowest)\b', question, re.I)) and not re.search(r'\blow[- ]risk\b', question, re.I)
@@ -29,7 +30,7 @@ def price_answer(question, evidence, owner):
         return f"{owner}, the {'highest high' if high else 'lowest low'} for {quote.get('name', quote.get('symbol'))} on {today.isoformat()} is {unit}{value:,.2f} based on the available session candles (which may be delayed). Source: {quote.get('source', 'market provider')}; updated {quote.get('asOf', 'unavailable')}."
     if valid(quote.get('price')):
         unit = '₹' if quote.get('currency') == 'INR' else quote.get('currency', '') + ' '
-        return f"{owner}, the latest available price of {quote.get('name', quote.get('symbol'))} is {unit}{quote['price']:,.2f} (Source: {quote.get('source', 'NSE/BSE')}, updated {quote.get('asOf', 'recently')})."
+        return f"{owner}, the latest available price of {quote.get('name', quote.get('symbol'))} is {unit}{quote['price']:,.2f} (Source: {quote.get('source', 'not supplied')}, updated {quote.get('asOf', 'timestamp not supplied')}). Quotes may be delayed."
     return None
 
 def is_hindi_query(text: str) -> bool:
