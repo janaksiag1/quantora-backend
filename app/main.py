@@ -185,6 +185,21 @@ async def health():
     import os
     return {'status': 'ok', 'service': 'Gainbud', 'usageReporting': 'provider-v1', 'revision': os.getenv('RENDER_GIT_COMMIT', '')}
 
+@app.get('/v1/ai-usage')
+async def ai_usage_report(request: Request, account: str | None = None):
+    # The middleware also requires the server-only internal API credential.
+    if request.headers.get('x-gainbud-admin') != 'true':
+        return JSONResponse({'error':'Administrator service access required'},status_code=403)
+    if account and not re.fullmatch(r'[\w-]{1,128}',account):
+        return JSONResponse({'error':'Invalid account'},status_code=400)
+    from .ai_usage import summarize_usage
+    with Session() as db:
+        query=select(ResearchAudit).where(ResearchAudit.source=='provider-usage-v1')
+        if account:
+            query=query.where(ResearchAudit.user_id==account)
+        rows=list(db.scalars(query.order_by(ResearchAudit.id.desc()).limit(501)))
+        return {'rows':summarize_usage([r.payload for r in rows[:500]]),'sample':min(500,len(rows)),'truncated':len(rows)>500,'note':'Latest 500 backend provider observations, including council workers. Provider-reported costs only; unknown costs are not zero. Excludes unreported calls and infrastructure.'}
+
 
 
 @app.get('/v1/market')
