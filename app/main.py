@@ -182,7 +182,8 @@ async def guard(request: Request, call_next):
 
 async def health():
 
-    return {'status': 'ok', 'service': 'Gainbud'}
+    import os
+    return {'status': 'ok', 'service': 'Gainbud', 'usageReporting': 'provider-v1', 'revision': os.getenv('RENDER_GIT_COMMIT', '')}
 
 
 
