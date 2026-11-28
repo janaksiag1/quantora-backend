@@ -155,6 +155,9 @@ async def guard(request: Request, call_next):
         return JSONResponse({'error': 'Request body too large'}, status_code=413)
 
     owner_token = research_owner.set(request.headers.get('x-quantora-user', 'local'))
+    from .ai_usage import request_usage
+    usage_events = []
+    usage_token = request_usage.set(usage_events)
 
     try:
 
@@ -163,8 +166,13 @@ async def guard(request: Request, call_next):
     finally:
 
         research_owner.reset(owner_token)
+        request_usage.reset(usage_token)
 
     response.headers['X-Content-Type-Options'] = 'nosniff'
+    # Metadata only; no prompts, outputs or account identifiers in this header.
+    if usage_events:
+        import json
+        response.headers['X-Gainbud-AI-Usage'] = json.dumps(usage_events[:30], separators=(',', ':'))
 
     return response
 

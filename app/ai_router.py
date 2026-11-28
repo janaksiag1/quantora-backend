@@ -85,6 +85,9 @@ class AIRouter:
             except ValueError: retry_after=60
             raise ProviderError(r.status_code,retry_after)
         data = r.json()
+        from .ai_usage import record_usage
+        provider = 'OpenRouter' if 'openrouter.ai' in base else 'Groq' if 'groq.com' in base else 'Vercel Gateway' if 'vercel.sh' in base else 'Compatible provider'
+        record_usage(provider, data.get('model') or model, data)
         content = data.get('choices',[{}])[0].get('message',{}).get('content')
         if not isinstance(content,str) or not content.strip():
             raise ValueError('Provider returned no answer')

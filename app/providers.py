@@ -136,6 +136,8 @@ class GeminiProvider:
                             if not r.is_success:
                                 continue
                             data = r.json()
+                            from .ai_usage import record_usage
+                            record_usage('Google', data.get('modelVersion', model), data)
                             output = ''.join(p.get('text', '') for p in data.get('candidates', [{}])[0].get('content', {}).get('parts', []) if not p.get('thought'))
                             if not output.strip():
                                 continue
